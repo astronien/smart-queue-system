@@ -11,7 +11,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
-    "clean": "rm -rf dist node_modules/.vite"
+    "clean": "rm -rf dist node_modules/.vite",
+    "pre-deploy": "bash scripts/pre-deploy-check.sh",
+    "deploy": "vercel --prod"
   },
   "dependencies": {
     "react": "^19.2.0",

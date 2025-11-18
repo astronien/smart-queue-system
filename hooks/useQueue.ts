@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Customer, Station, CustomFieldData } from '../types';
 import { STATION_ORDER } from '../constants';
+import { SyncManager } from '../utils/sync';
 
 const CUSTOMERS_KEY = 'smartq_customers';
 const COUNTER_KEY = 'smartq_counter';
@@ -36,6 +37,7 @@ export const useQueue = () => {
   // Effect to save state to localStorage whenever it changes
   useEffect(() => {
     try {
+      // Save directly to localStorage (don't broadcast here to avoid loops)
       localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customers));
       localStorage.setItem(COUNTER_KEY, String(queueCounter));
     } catch (e) {
@@ -43,7 +45,7 @@ export const useQueue = () => {
     }
   }, [customers, queueCounter]);
 
-  // Effect to listen for storage changes from other tabs/windows
+  // Effect to listen for storage changes from other tabs/windows AND current tab
   useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
       if (event.key === CUSTOMERS_KEY) {
@@ -72,9 +74,39 @@ export const useQueue = () => {
       }
     };
 
+    // Listen for custom event (same tab)
+    const handleLocalStorageChange = (event: CustomEvent) => {
+      const { key, value } = event.detail;
+      
+      if (key === CUSTOMERS_KEY) {
+        try {
+          const customers = Array.isArray(value) ? value : JSON.parse(value);
+          setCustomers(customers.map((c: any) => ({
+            ...c,
+            createdAt: new Date(c.createdAt),
+            status: c.status || 'WAITING',
+          })));
+        } catch (e) {
+          console.error("Failed to sync customers from local change", e);
+        }
+      }
+      
+      if (key === COUNTER_KEY) {
+        try {
+          const counter = typeof value === 'number' ? value : parseInt(value, 10);
+          setQueueCounter(counter);
+        } catch (e) {
+          console.error("Failed to sync counter from local change", e);
+        }
+      }
+    };
+
     window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('local-storage-change', handleLocalStorageChange as EventListener);
+    
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('local-storage-change', handleLocalStorageChange as EventListener);
     };
   }, []);
 
@@ -91,29 +123,40 @@ export const useQueue = () => {
       customFieldData: customFieldData,
       status: 'WAITING',
     };
-    setCustomers(prev => [...prev, newCustomer]);
-    setQueueCounter(prev => prev + 1);
+    
+    const updatedCustomers = [...customers, newCustomer];
+    const updatedCounter = queueCounter + 1;
+    
+    // Broadcast changes to all tabs
+    SyncManager.broadcastChange(CUSTOMERS_KEY, updatedCustomers);
+    SyncManager.broadcastChange(COUNTER_KEY, updatedCounter);
+    
+    setCustomers(updatedCustomers);
+    setQueueCounter(updatedCounter);
+    
     return newCustomer;
-  }, [queueCounter]);
+  }, [queueCounter, customers]);
 
   const moveCustomer = useCallback((customerId: number, direction: 'next' | 'previous') => {
-    setCustomers(prev =>
-      prev.map(customer => {
-        if (customer.id === customerId) {
-          const currentStationIndex = STATION_ORDER.indexOf(customer.station);
-          let nextStationIndex: number;
-          if (direction === 'next') {
-            nextStationIndex = Math.min(currentStationIndex + 1, STATION_ORDER.length - 1);
-          } else {
-            nextStationIndex = Math.max(currentStationIndex - 1, 0);
-          }
-          // Reset status when moving to a new station
-          return { ...customer, station: STATION_ORDER[nextStationIndex], status: 'WAITING' };
+    const updatedCustomers = customers.map(customer => {
+      if (customer.id === customerId) {
+        const currentStationIndex = STATION_ORDER.indexOf(customer.station);
+        let nextStationIndex: number;
+        if (direction === 'next') {
+          nextStationIndex = Math.min(currentStationIndex + 1, STATION_ORDER.length - 1);
+        } else {
+          nextStationIndex = Math.max(currentStationIndex - 1, 0);
         }
-        return customer;
-      })
-    );
-  }, []);
+        // Reset status when moving to a new station
+        return { ...customer, station: STATION_ORDER[nextStationIndex], status: 'WAITING' };
+      }
+      return customer;
+    });
+    
+    // Broadcast changes
+    SyncManager.broadcastChange(CUSTOMERS_KEY, updatedCustomers);
+    setCustomers(updatedCustomers);
+  }, [customers]);
 
   const completeCustomer = useCallback((customerId: number) => {
     const customer = customers.find(c => c.id === customerId);
@@ -133,16 +176,22 @@ export const useQueue = () => {
       }
     }
     
-    setCustomers(prev => prev.filter(c => c.id !== customerId));
+    const updatedCustomers = customers.filter(c => c.id !== customerId);
+    
+    // Broadcast changes
+    SyncManager.broadcastChange(CUSTOMERS_KEY, updatedCustomers);
+    setCustomers(updatedCustomers);
   }, [customers]);
 
   const setCustomerStatus = useCallback((customerId: number, status: 'WAITING' | 'IN_PROGRESS') => {
-    setCustomers(prev =>
-      prev.map(customer =>
-        customer.id === customerId ? { ...customer, status } : customer
-      )
+    const updatedCustomers = customers.map(customer =>
+      customer.id === customerId ? { ...customer, status } : customer
     );
-  }, []);
+    
+    // Broadcast changes
+    SyncManager.broadcastChange(CUSTOMERS_KEY, updatedCustomers);
+    setCustomers(updatedCustomers);
+  }, [customers]);
 
   return { customers, addCustomer, moveCustomer, completeCustomer, setCustomerStatus };
 };

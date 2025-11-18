@@ -1,0 +1,71 @@
+// Prisma Schema for Smart Queue System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id              Int      @id @default(autoincrement())
+  queueNumber     String   @unique
+  firstName       String
+  lastName        String
+  phone           String
+  station         Station
+  status          Status   @default(WAITING)
+  customFieldData Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  completedAt     DateTime?
+  branchId        String?
+  
+  @@index([station, status])
+  @@index([branchId])
+  @@index([createdAt])
+}
+
+model QueueCounter {
+  id        Int      @id @default(autoincrement())
+  branchId  String   @unique
+  counter   Int      @default(1)
+  updatedAt DateTime @updatedAt
+}
+
+model RegistrationSettings {
+  id           Int      @id @default(autoincrement())
+  branchId     String   @unique
+  logoUrl      String?
+  title        String   @default("Smart Queue")
+  subtitle     String   @default("กรอกข้อมูลเพื่อรับบัตรคิว")
+  themeColor   String   @default("#0ea5e9")
+  customFields Json?
+  updatedAt    DateTime @updatedAt
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Station {
+  TRADE_IN
+  PAYMENT
+  DEVICE_CHECK
+  DATA_TRANSFER
+}
+
+enum Status {
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}

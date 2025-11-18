@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Customer, Station, CustomFieldData, CustomFieldType } from '../types';
 import { STATION_ORDER } from '../constants';
 import { useRegistrationSettings } from '../hooks/useRegistrationSettings';
+import { SyncManager } from '../utils/sync';
 
 const CUSTOMERS_KEY = 'smartq_customers';
 const COUNTER_KEY = 'smartq_counter';
@@ -73,8 +74,10 @@ const RegistrationPage = () => {
         const updatedCustomers = [...customers, newCustomer];
         const updatedCounter = queueCounter + 1;
 
-        localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updatedCustomers));
-        localStorage.setItem(COUNTER_KEY, String(updatedCounter));
+        // Use SyncManager to broadcast changes to all tabs
+        SyncManager.broadcastChange(CUSTOMERS_KEY, updatedCustomers);
+        SyncManager.broadcastChange(COUNTER_KEY, updatedCounter);
+        
         // --- End Transaction ---
 
         setSubmittedCustomer(newCustomer);
