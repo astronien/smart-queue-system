@@ -1,0 +1,13 @@
+{
+  "name": "Smart Queue System",
+  "description": "A web-based queuing system for managing customer flow through various service stations, from trade-in to data transfer, with thermal printing capabilities for queue tickets.",
+  "requestFramePermissions": [],
+  "hosting": {
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
